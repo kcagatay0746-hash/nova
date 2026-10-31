@@ -6,6 +6,7 @@ title Nova v2 - Kurulum
 rem ============================================================
 rem  Nova v2 - Turkce, arac kullanabilen yapay zeka asistani
 rem  Tek dosyalik kurulum: bu .bat icindeki projeyi diske acar.
+rem  Cikarma: PowerShell -> Python -> tar (biri calisirsa yeter)
 rem  Kullanim:  NOVA-KUR.bat            (varsayilan: .\nova-v2)
 rem            NOVA-KUR.bat C:\Nova    (hedef klasor)
 rem ============================================================
@@ -26,12 +27,20 @@ if not exist "%TARGET%" mkdir "%TARGET%" >nul 2>nul
 set "ZIP=%TEMP%\nova-v2-%RANDOM%.zip"
 
 echo [1/3] Dosyalar cikariliyor...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $self=Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8; $b='NOVA'+'_PAYLOAD_BEGIN'; $e='NOVA'+'_PAYLOAD_END'; $m=[regex]::Match($self,'(?s)'+$b+'(.*?)'+$e); if(-not $m.Success){Write-Error 'Payload bulunamadi'; exit 1}; [IO.File]::WriteAllBytes('%ZIP%',[Convert]::FromBase64String(($m.Groups[1].Value -replace '\s',''))); Expand-Archive -LiteralPath '%ZIP%' -DestinationPath '%TARGET%' -Force"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $self=Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8; $mb='NOVA'+'_PAYLOAD_BEGIN'; $me='NOVA'+'_PAYLOAD_END'; $i=$self.IndexOf($mb); $j=$self.IndexOf($me,$i); if($i -lt 0 -or $j -le $i){Write-Error 'Payload bulunamadi'; exit 1}; $part=$self.Substring($i+$mb.Length,$j-($i+$mb.Length)); $b64=[regex]::Replace($part,'[^A-Za-z0-9+/=]',''); if(($b64.Length -band 3) -ne 0){Write-Error 'Base64 uzunlugu gecersiz'; exit 1}; [IO.File]::WriteAllBytes('%ZIP%',[Convert]::FromBase64String($b64)); Expand-Archive -LiteralPath '%ZIP%' -DestinationPath '%TARGET%' -Force"
+if errorlevel 1 goto :TRYPY
+goto :EXTRACTED
+
+:TRYPY
+echo       PowerShell cikaramadi, Python deneniyor...
+where python >nul 2>nul
+if errorlevel 1 goto :TRYTAR
+python -c "import base64,re,zipfile;d=open(r'%~f0','rb').read().decode('ascii');b='NOVA'+'_PAYLOAD_BEGIN';e='NOVA'+'_PAYLOAD_END';i=d.index(b);j=d.index(e,i);s=re.sub(r'[^A-Za-z0-9+/=]','',d[i+len(b):j]);open(r'%ZIP%','wb').write(base64.b64decode(s));zipfile.ZipFile(r'%ZIP%').extractall(r'%TARGET%')"
 if errorlevel 1 goto :TRYTAR
 goto :EXTRACTED
 
 :TRYTAR
-echo       Expand-Archive basarisiz, tar deneniyor...
+echo       tar deneniyor...
 tar -xf "%ZIP%" -C "%TARGET%"
 if errorlevel 1 goto :FAIL
 
@@ -100,7 +109,7 @@ echo [HATA] Cikarma basarisiz. Gecici zip: %ZIP%
 pause
 exit /b 1
 
-:NOVA_PAYLOAD_BEGIN
+NOVA_PAYLOAD_BEGIN
 UEsDBBQAAAAIAAyEX10FrhhsYQ8AACYtAAAJAAAAc2VydmVyLnB5rRrLbtzI8T5f0ejFAhyHomWv
 vUAmYRJJKycOvLbi0QJZaAWih+zRcIdsTthNySNFQG77A7kbyMXX6JLT3iT/SL4kVf0gm/PQateh
 AA1ZrOruqq53k1L6ujpn5L//+Cc5vv2xnt9+4CFhNbv9QOZNUTDBJnnBBZFcFjlZsgVbkks+v/0X
@@ -1287,4 +1296,4 @@ ne2xAQAAQwIAAAoAAAAAAAAAAAAAAKSBSfIAAERvY2tlcmZpbGVQSwECFAMUAAAACAAmhF9d+2HU
 Oc0AAAB8AQAACAAAAAAAAAAAAAAApIEi9AAATWFrZWZpbGVQSwECFAMUAAAACADIgl9dRWFXkEMA
 AABOAAAACgAAAAAAAAAAAAAApIEV9QAALmdpdGlnbm9yZVBLAQIUAxQAAAAIAPiDX10AdUop/AsA
 ALYXAAAJAAAAAAAAAAAAAACkgYD1AABSRUFETUUubWRQSwUGAAAAABsAGwBWBgAAowEBAAAA
-:NOVA_PAYLOAD_END
+NOVA_PAYLOAD_END
