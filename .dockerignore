@@ -1,0 +1,10 @@
+.venv
+__pycache__
+*.pyc
+.git
+.pytest_cache
+nova.db
+nova.db-*
+.env
+Nova v1 max.zip
+tests
