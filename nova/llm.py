@@ -16,13 +16,13 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Protocol
+from typing import Any, Protocol
 
 import httpx
 
 from .config import Settings
-from .tools import format_number
 
 
 class ProviderError(RuntimeError):
@@ -264,7 +264,7 @@ class OpenAIProvider:
     ) -> AsyncIterator[dict]:
         payload: dict[str, Any] = {
             "model": self.model,
-            "messages": [{"role": "system", "content": system}] + to_openai_messages(messages),
+            "messages": [{"role": "system", "content": system}, *to_openai_messages(messages)],
             "stream": True,
             "temperature": self._temperature,
             "max_tokens": self._max_tokens,
@@ -277,10 +277,12 @@ class OpenAIProvider:
         calls: dict[int, dict] = {}
         finish_reason: str | None = None
         try:
-            async with httpx.AsyncClient(timeout=self._timeout, verify=self._verify) as client:
-                async with client.stream(
+            async with (
+                httpx.AsyncClient(timeout=self._timeout, verify=self._verify) as client,
+                client.stream(
                     "POST", self._base + "/chat/completions", json=payload, headers=self._headers()
-                ) as response:
+                ) as response,
+            ):
                     if response.status_code >= 400:
                         body = (await response.aread()).decode("utf-8", errors="replace")
                         raise ProviderError(f"Model servisi {response.status_code} döndü: {body[:160]}")

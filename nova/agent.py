@@ -20,13 +20,13 @@ import asyncio
 import inspect
 import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import AsyncIterator
 
 from .config import Settings
 from .llm import AssistantTurn, Provider, ProviderError, ToolCall
 from .memory import MemoryStore
-from .prompts import SITE_ANALYSIS_PROMPT, CODE_REVIEW_PROMPT, build_system_prompt
+from .prompts import CODE_REVIEW_PROMPT, SITE_ANALYSIS_PROMPT, build_system_prompt
 from .safety import SafetyError, clean_text, clip
 from .tools import Tool, ToolContext, ToolError, build_tools, tool_specs
 
@@ -88,6 +88,10 @@ class NovaAgent:
         budget = 8000
         for item in (source or [])[-self.settings.history_limit :]:
             role = item.get("role")
+            if role is None:
+                # İstemci geçmişi "who" alanıyla da gönderebilir (v1 uyumluluğu).
+                who = item.get("who")
+                role = "assistant" if who in {"bot", "assistant"} else "user" if who else None
             if role not in {"user", "assistant"}:
                 continue
             text = clean_text(str(item.get("text") or item.get("content") or ""), MAX_MESSAGE_CHARS)
@@ -187,7 +191,7 @@ class NovaAgent:
         answer_parts: list[str] = []
         last_turn: AssistantTurn | None = None
 
-        for round_index in range(max(1, self.settings.max_tool_rounds)):
+        for _ in range(max(1, self.settings.max_tool_rounds)):
             try:
                 turn: AssistantTurn | None = None
                 async for event in self.provider.stream_turn(system, messages, tools):

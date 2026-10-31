@@ -94,7 +94,7 @@ class Settings:
     version: str = __version__
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         provider = _detect_provider()
         default_model = PROVIDER_DEFAULTS.get(provider, PROVIDER_DEFAULTS["offline"])
         return cls(

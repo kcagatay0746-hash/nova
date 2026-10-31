@@ -34,7 +34,7 @@ def clean_text(raw: str, limit: int = MAX_INPUT_CHARS) -> str:
     text = re.sub(r"[ \t\r\f\v]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     if len(text) > limit:
-        text = text[:limit].rstrip() + " …"
+        text = text[: max(1, limit - 2)].rstrip() + " …"
     return text
 
 
@@ -92,9 +92,10 @@ async def assert_public_url(url: str, *, allow_private: bool = False) -> str:
     normalized = normalize_url(url)
     host = urlsplit(normalized).hostname or ""
     lowered = host.lower().rstrip(".")
-    if lowered in {"localhost", "localhost.localdomain"} or lowered.endswith((".local", ".internal", ".lan", ".home")):
-        if not allow_private:
-            raise SafetyError("İç ağ adresleri kontrol edilemez.")
+    local_names = {"localhost", "localhost.localdomain"}
+    is_local_name = lowered in local_names or lowered.endswith((".local", ".internal", ".lan", ".home"))
+    if is_local_name and not allow_private:
+        raise SafetyError("İç ağ adresleri kontrol edilemez.")
     literal = _host_literal_is_public(lowered)
     if literal is False and not allow_private:
         raise SafetyError("İç ağ adresleri kontrol edilemez.")

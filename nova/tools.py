@@ -16,17 +16,17 @@ import json
 import math
 import operator
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
-from urllib.parse import quote_plus
+from datetime import UTC, datetime
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
 from .config import Settings
 from .memory import MemoryStore
-from .safety import SafetyError, assert_public_url, clip, normalize_url
+from .safety import assert_public_url, clip
 
 USER_AGENT = "NovaAsistan/2.0 (+https://github.com/kcagatay0746-hash/nova)"
 HTTP_TIMEOUT = httpx.Timeout(12.0, connect=6.0)
@@ -115,7 +115,7 @@ def _eval_node(node: ast.AST) -> float:
     if isinstance(node, ast.Constant):
         if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
             raise ToolError("Yalnızca sayılar kullanılabilir.")
-        return float(node.value)
+        return node.value  # int/float ayrımı korunur
     if isinstance(node, ast.BinOp) and type(node.op) in _BIN_OPS:
         left = _eval_node(node.left)
         right = _eval_node(node.right)
@@ -143,29 +143,53 @@ def _eval_node(node: ast.AST) -> float:
     raise ToolError("İfadede desteklenmeyen bir öğe var.")
 
 
-def safe_calculate(expression: str) -> float:
-    """AST tabanlı güvenli hesap: eval/exec kullanmaz."""
-    expr = (expression or "").strip()
-    if not expr:
-        raise ToolError("Hesaplanacak ifade boş.")
-    if len(expr) > 300:
-        raise ToolError("İfade çok uzun.")
-    expr = expr.replace("^", "**").replace(",", ".")
+def _eval_expression(expr: str) -> float:
     try:
         tree = ast.parse(expr, mode="eval")
     except SyntaxError as exc:
         raise ToolError("İfade anlaşılamadı.") from exc
     if sum(1 for _ in ast.walk(tree)) > _MAX_NODES:
         raise ToolError("İfade çok karmaşık.")
-    value = _eval_node(tree)
-    if not math.isfinite(value):
-        raise ToolError("Sonuç sonlu bir sayı değil.")
-    return value
+    try:
+        return float(_eval_node(tree))
+    except OverflowError as exc:
+        raise ToolError("Sonuç çok büyük.") from exc
+
+
+def safe_calculate(expression: str) -> float:
+    """AST tabanlı güvenli hesap: eval/exec kullanmaz.
+
+    Türkçe ondalık virgülü de desteklenir: önce ifade olduğu gibi denenir
+    (böylece ``round(2.567, 2)`` gibi fonksiyon argümanları bozulmaz), olmazsa
+    virgüller ondalık ayırıcı kabul edilerek yeniden denenir.
+    """
+    expr = (expression or "").strip()
+    if not expr:
+        raise ToolError("Hesaplanacak ifade boş.")
+    if len(expr) > 300:
+        raise ToolError("İfade çok uzun.")
+    expr = expr.replace("^", "**")
+
+    candidates = [expr]
+    if "," in expr:
+        candidates.append(expr.replace(",", "."))
+
+    last_error: ToolError | None = None
+    for candidate in candidates:
+        try:
+            value = _eval_expression(candidate)
+        except ToolError as exc:
+            last_error = exc
+            continue
+        if not math.isfinite(value):
+            raise ToolError("Sonuç sonlu bir sayı değil.")
+        return value
+    raise last_error or ToolError("İfade anlaşılamadı.")
 
 
 def format_number(value: float) -> str:
     if abs(value - round(value)) < 1e-9:
-        return str(int(round(value)))
+        return str(round(value))
     return str(round(value, 6)).rstrip("0").rstrip(".").replace(".", ",")
 
 
@@ -363,7 +387,7 @@ def current_datetime(ctx: ToolContext, args: dict) -> dict:
     except (ZoneInfoNotFoundError, ValueError):
         tz = ZoneInfo("Europe/Istanbul")
         tz_name = "Europe/Istanbul"
-    now = datetime.now(timezone.utc).astimezone(tz)
+    now = datetime.now(UTC).astimezone(tz)
     weekdays = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
     months = [
         "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
@@ -381,10 +405,30 @@ def current_datetime(ctx: ToolContext, args: dict) -> dict:
 
 # ============================================================ site kontrolü
 
-_META_RE = re.compile(r"<meta[^>]+name=[\"']description[\"'][^>]*content=[\"']([^\"']*)", re.IGNORECASE)
+# Not: bazı sayfalar öznitelikleri tırnaksız yazar (lang=en gibi).
+_META_RE = re.compile(
+    r"<meta[^>]*name=[\"']?description[\"']?[^>]*content=(\"[^\"]*\"|'[^']*'|[^\s>]+)",
+    re.IGNORECASE | re.DOTALL,
+)
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
-_LANG_RE = re.compile(r"<html[^>]+lang=[\"']([^\"']+)", re.IGNORECASE)
-_H1_RE = re.compile(r"<h1[\b>]", re.IGNORECASE)
+_LANG_RE = re.compile(r"<html[^>]*\blang\s*=\s*[\"']?([a-zA-Z-]+)", re.IGNORECASE)
+_H1_RE = re.compile(r"<h1[\s>]", re.IGNORECASE)
+
+
+def parse_html_meta(html: str) -> dict:
+    """HTML'den başlık, açıklama, dil ve H1 sayısını çıkarır."""
+    title_match = _TITLE_RE.search(html)
+    desc_match = _META_RE.search(html)
+    lang_match = _LANG_RE.search(html)
+    description = None
+    if desc_match:
+        description = desc_match.group(1).strip().strip("\"'")
+    return {
+        "title": clip(" ".join(title_match.group(1).split()), 160) if title_match else None,
+        "description": clip(" ".join(description.split()), 240) if description else None,
+        "lang": lang_match.group(1) if lang_match else None,
+        "h1_count": len(_H1_RE.findall(html)),
+    }
 
 
 async def check_site(ctx: ToolContext, args: dict) -> dict:
@@ -407,9 +451,6 @@ async def check_site(ctx: ToolContext, args: dict) -> dict:
         }
     elapsed_ms = int((asyncio.get_running_loop().time() - started) * 1000)
     html = body.decode(response.encoding or "utf-8", errors="replace")
-    title_match = _TITLE_RE.search(html)
-    desc_match = _META_RE.search(html)
-    lang_match = _LANG_RE.search(html)
     return {
         "url": str(response.url),
         "up": response.status_code < 400,
@@ -417,17 +458,14 @@ async def check_site(ctx: ToolContext, args: dict) -> dict:
         "response_ms": elapsed_ms,
         "size_kb": round(len(body) / 1024, 1),
         "https": str(response.url).startswith("https://"),
-        "title": clip(" ".join(title_match.group(1).split()), 160) if title_match else None,
-        "description": clip(desc_match.group(1).strip(), 240) if desc_match else None,
-        "lang": lang_match.group(1) if lang_match else None,
-        "h1_count": len(_H1_RE.findall(html)),
+        **parse_html_meta(html),
         "server": response.headers.get("server"),
     }
 
 
 # ============================================================ hafıza araçları
 
-def memory_save(ctx: ToolContext, args: dict) -> dict:
+async def memory_save(ctx: ToolContext, args: dict) -> dict:
     text = (args.get("text") or "").strip()
     if len(text) < 3:
         raise ToolError("Kaydedilecek bilgi çok kısa.")
@@ -440,7 +478,7 @@ def memory_save(ctx: ToolContext, args: dict) -> dict:
     }
 
 
-def memory_search(ctx: ToolContext, args: dict) -> dict:
+async def memory_search(ctx: ToolContext, args: dict) -> dict:
     query = (args.get("query") or "").strip()
     limit = max(1, min(int(args.get("limit") or 5), 10))
     found = ctx.memory.search_facts(query, session_id=ctx.session_id, limit=limit)

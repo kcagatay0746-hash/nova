@@ -20,12 +20,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -33,9 +34,8 @@ from nova.agent import NovaAgent
 from nova.config import Settings
 from nova.llm import ProviderError, build_provider
 from nova.memory import MemoryStore
-from nova.prompts import CODE_REVIEW_PROMPT
 from nova.safety import RateLimiter, SafetyError, clean_text
-from nova.tools import ToolContext, ToolError, build_tools
+from nova.tools import ToolContext, ToolError
 
 logger = logging.getLogger("nova")
 
@@ -314,8 +314,22 @@ async def health():
 
 # ============================================================ statik dosyalar
 
+# Yalnızca arayüz dosyaları servis edilir; kaynak kod, .env veya veritabanı
+# dosyalarının HTTP üzerinden okunmasını engeller.
+PUBLIC_STATIC_FILES = {"", ".", "index.html", "app.js", "styles.css", "favicon.ico"}
+
+
+class PublicStaticFiles(StaticFiles):
+    """Beyaz listeye alınmış statik dosyaları servis eder."""
+
+    async def get_response(self, path: str, scope):  # type: ignore[override]
+        if path not in PUBLIC_STATIC_FILES:
+            return PlainTextResponse("Bulunamadı", status_code=404)
+        return await super().get_response(path, scope)
+
+
 if settings.static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(settings.static_dir), html=True), name="static")
+    app.mount("/", PublicStaticFiles(directory=str(settings.static_dir), html=True), name="static")
 else:  # pragma: no cover
     logger.warning("Statik dizin bulunamadı: %s", settings.static_dir)
 
