@@ -211,7 +211,11 @@ async def _geocode(city: str, verify: bool | str = True) -> dict:
     if not results:
         raise ToolError("Bu şehir bulunamadı: " + city)
     top = results[0]
-    label = ", ".join(part for part in [top.get("name"), top.get("admin1"), top.get("country")] if part)
+    parts: list[str] = []
+    for part in (top.get("name"), top.get("admin1"), top.get("country")):
+        if part and part not in parts:
+            parts.append(part)
+    label = ", ".join(parts)
     return {"lat": top["latitude"], "lon": top["longitude"], "place": label}
 
 
