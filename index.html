@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nova — Sesli Asistan</title>
+  <meta name="description" content="Hava durumu, şarj seviyesi, matematik işlemleri ve web araması yapabilen Türkçe sesli asistan Nova." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23f5a524'/%3E%3Cpath d='M7 16h3l2-6 3 12 3-9 2 3h5' fill='none' stroke='%2314162e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800&f[]=general-sans@400,500,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#asistan">İçeriğe geç</a>
+
+  <div class="shell">
+    <header class="site-header">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 40 40" role="img" aria-label="Nova logosu">
+          <circle cx="20" cy="20" r="19" fill="var(--color-primary)" />
+          <path d="M8 21h4.5l3-9 4.5 17 4-12.5 2.5 4.5H33" fill="none" stroke="var(--color-on-primary)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <div class="brand-text">
+          <h1>Nova</h1>
+          <p>Sesli asistanın</p>
+        </div>
+      </div>
+      <button type="button" class="theme-toggle" data-theme-toggle aria-label="Açık moda geç">
+        <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </header>
+
+    <main>
+      <section class="assistant" id="asistan" aria-label="Sesli asistan">
+        <div class="mic-zone">
+          <button type="button" id="mic-btn" class="mic-btn" data-testid="button-mic" aria-label="Mikrofonu aç ve konuş">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="2" width="6" height="12" rx="3"/>
+              <path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/>
+            </svg>
+          </button>
+          <p id="assistant-status" class="assistant-status" data-testid="text-status" role="status" aria-live="polite">Konuşmak için mikrofona dokun</p>
+        </div>
+
+        <div class="chips" role="list" aria-label="Hızlı sorular">
+          <button type="button" class="chip" data-q="Hava nasıl?">Hava nasıl?</button>
+          <button type="button" class="chip" data-q="Şarjım ne kadar?">Şarjım ne kadar?</button>
+          <button type="button" class="chip" data-q="Yirmi beş kere dört kaç eder?">25 × 4 kaç eder?</button>
+          <button type="button" class="chip" data-q="Bana kısa bir hikaye anlat">Bana hikaye anlat</button>
+          <button type="button" class="chip" data-q="İstanbul'un nüfusu kaçtır?">İstanbul'un nüfusu?</button>
+          <button type="button" class="chip" data-q="Sekizin karekökü kaçtır?">8'in karekökü?</button>
+        </div>
+
+        <div id="conversation" class="conversation" aria-label="Konuşma geçmişi" data-testid="conversation"></div>
+
+        <form id="text-form" class="text-form" autocomplete="off">
+          <label class="sr-only" for="text-input">Yazarak sor</label>
+          <input id="text-input" class="text-input" type="text" placeholder="Yazarak da sorabilirsin…" data-testid="input-question" />
+          <button type="submit" class="send-btn" data-testid="button-send" aria-label="Gönder">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          </button>
+        </form>
+      </section>
+
+      <div class="dashboard">
+        <section class="card weather-card" aria-label="Hava durumu">
+          <div class="card-head">
+            <h2>Hava Durumu</h2>
+            <span id="weather-loc" class="card-sub" data-testid="text-location">Konum alınıyor…</span>
+          </div>
+          <div id="weather-body" class="weather-body">
+            <div class="weather-loading" data-testid="status-weather-loading">Hava durumu yükleniyor…</div>
+          </div>
+        </section>
+
+        <section class="card battery-card" aria-label="Şarj seviyesi">
+          <div class="card-head">
+            <h2>Şarj</h2>
+            <span id="battery-state" class="card-sub" data-testid="text-battery-state">—</span>
+          </div>
+          <div class="battery-body">
+            <div class="battery-meter" role="img" aria-label="Pil göstergesi">
+              <div class="battery-shell">
+                <div id="battery-fill" class="battery-fill" data-testid="battery-fill" style="width:0%"></div>
+                <span id="battery-pct" class="battery-pct" data-testid="text-battery-pct">—%</span>
+              </div>
+              <div class="battery-tip" aria-hidden="true"></div>
+            </div>
+            <p id="battery-note" class="battery-note" data-testid="text-battery-note">Pil bilgisi okunuyor…</p>
+          </div>
+        </section>
+      </div>
+      <section class="card check-card" id="kontrol" aria-label="Uygulama kontrolü">
+        <div class="card-head">
+          <h2>Uygulama Kontrolü</h2>
+          <span class="card-sub">Site kontrolü, kod incelemesi ve dosya analizi</span>
+        </div>
+
+        <form id="site-form" class="check-form" autocomplete="off">
+          <label for="site-url">Yayındaki site / çalışma durumu</label>
+          <div class="check-row">
+            <input id="site-url" class="text-input" type="text" placeholder="ornek.com veya https://ornek.com" data-testid="input-site-url" />
+            <button type="submit" class="check-btn" data-testid="button-site-check">Kontrol et</button>
+          </div>
+        </form>
+
+        <form id="code-form" class="check-form" autocomplete="off">
+          <label for="code-input">Kod incelemesi</label>
+          <div class="check-row">
+            <input id="code-filename" class="text-input" type="text" placeholder="Dosya adı (opsiyonel, örn. app.js)" data-testid="input-filename" />
+            <label class="file-btn" for="file-input" data-testid="button-file">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              Dosya seç
+              <input id="file-input" type="file" accept=".js,.ts,.jsx,.tsx,.py,.html,.css,.json,.java,.cs,.php,.go,.rs,.rb,.kt,.swift,.sql,.txt,.md,.vue,.svelte" hidden />
+            </label>
+          </div>
+          <textarea id="code-input" class="code-input" rows="6" placeholder="Kodunu buraya yapıştır ya da dosya seç…" data-testid="input-code"></textarea>
+          <button type="submit" class="check-btn check-btn-full" data-testid="button-review">İncele</button>
+        </form>
+
+        <div id="check-result" class="check-result" data-testid="check-result" aria-live="polite"></div>
+      </section>
+      <section class="card apps-card" id="uygulamalar" aria-label="Uygulamalar">
+        <div class="card-head">
+          <h2>Uygulamalar</h2>
+          <span class="card-sub">Tek dokunuşla aç — sesle de “YouTube aç” diyebilirsin</span>
+        </div>
+        <div class="apps-grid" id="apps-grid">
+          <button type="button" class="app-btn" data-app="youtube" data-testid="button-app-youtube">YouTube</button>
+          <button type="button" class="app-btn" data-app="whatsapp" data-testid="button-app-whatsapp">WhatsApp</button>
+          <button type="button" class="app-btn" data-app="instagram" data-testid="button-app-instagram">Instagram</button>
+          <button type="button" class="app-btn" data-app="gmail" data-testid="button-app-gmail">Gmail</button>
+          <button type="button" class="app-btn" data-app="github" data-testid="button-app-github">GitHub</button>
+          <button type="button" class="app-btn" data-app="spotify" data-testid="button-app-spotify">Spotify</button>
+          <button type="button" class="app-btn" data-app="netflix" data-testid="button-app-netflix">Netflix</button>
+          <button type="button" class="app-btn" data-app="google" data-testid="button-app-google">Google</button>
+          <button type="button" class="app-btn" data-app="haritalar" data-testid="button-app-maps">Haritalar</button>
+          <button type="button" class="app-btn" data-app="vikipedi" data-testid="button-app-wiki">Vikipedi</button>
+          <button type="button" class="app-btn" data-app="chatgpt" data-testid="button-app-chatgpt">ChatGPT</button>
+          <button type="button" class="app-btn app-close" id="close-app-btn" data-testid="button-close-app">Son açılanı kapat</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Nova · Hava verisi <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> · Web araması Vikipedi ve DuckDuckGo · Gelişmiş sorular yapay zekâ ile yanıtlanır</p>
+    </footer>
+  </div>
+
+  <script src="app.js" defer></script>
+<script data-pplx-inline-edit>
+(function () {
+  if (window === window.top) return;
+
+  const allowedParentOrigins = ["https://www.perplexity.ai","https://perplexity.ai","https://testing.perplexity.ai","https://staging.perplexity.ai","https://*.preview.i.perplexity.ai","http://perplexity.localhost","http://localhost:1420","http://127.0.0.1:1420","http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"];
+  const MAX_FONT_BYTES = 500 * 1024;
+  const MAX_TOTAL_FONT_BYTES = 2 * 1024 * 1024;
+  let scrollForwarding = false;
+  let scrollRaf = 0;
+  let trustedTopOrigin = null;
+
+  // Allow entries like "https://*.preview.i.perplexity.ai" — the wildcard
+  // matches a single DNS label (no dots), so "https://*.foo" cannot stretch
+  // across multiple labels.
+  function matchesAllowedOrigin(origin) {
+    if (!origin) return false;
+    for (const entry of allowedParentOrigins) {
+      if (!entry.includes("*")) {
+        if (entry === origin) return true;
+        continue;
+      }
+      const pattern = new RegExp(
+        "^" +
+          entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^.]+") +
+          "$",
+      );
+      if (pattern.test(origin)) return true;
+    }
+    return false;
+  }
+
+  // Trust decision: when the sender is same-origin-visible (event.origin is a
+  // real origin like https://www.perplexity.ai) we trust event.origin directly.
+  // When event.origin is "null" (opaque broker srcdoc), we fall back to the
+  // broker's stamped `parentOrigin` to identify the top window. The fallback
+  // is claim-only — we rely on the browser's native `targetOrigin` enforcement
+  // on the response path (see postToTrustedTop) to ensure replies can't be
+  // delivered to anyone but the actual top window of that claimed origin.
+  function getTrustedParentOrigin(event) {
+    const forwardedParentOrigin =
+      typeof event.data.parentOrigin === "string" ? event.data.parentOrigin : null;
+    const parentOrigin = event.origin === "null" ? forwardedParentOrigin : event.origin;
+    return matchesAllowedOrigin(parentOrigin) ? parentOrigin : null;
+  }
+
+  // All responses go to window.top with targetOrigin = the allowlisted origin.
+  // An attacker that iframes us inside their own null-origin broker can claim
+  // any parentOrigin they like, but the browser will drop the reply whenever
+  // the real top's origin doesn't match — so the screenshot never leaves.
+  function postToTrustedTop(message) {
+    if (!trustedTopOrigin) return;
+    try {
+      window.top.postMessage(message, trustedTopOrigin);
+    } catch (_error) {}
+  }
+
+  function inlineAll(original, clone) {
+    if (original.nodeType !== 1 || clone.nodeType !== 1) return;
+
+    try {
+      const computedStyle = getComputedStyle(original);
+      // cssText on a computed style is the serialized declaration in modern
+      // Chromium/Safari — a single read beats enumerating ~400 longhand
+      // properties. Firefox returns "" here, so we fall back on empty.
+      const serialized = computedStyle.cssText;
+      if (serialized) {
+        clone.style.cssText = serialized;
+      } else {
+        const parts = new Array(computedStyle.length);
+        for (let index = 0; index < computedStyle.length; index += 1) {
+          const property = computedStyle[index];
+          parts[index] = `${property}:${computedStyle.getPropertyValue(property)};`;
+        }
+        clone.style.cssText = parts.join("");
+      }
+    } catch (_error) {}
+
+    const originalChildren = original.children;
+    const clonedChildren = clone.children;
+    for (
+      let index = 0;
+      index < originalChildren.length && index < clonedChildren.length;
+      index += 1
+    ) {
+      inlineAll(originalChildren[index], clonedChildren[index]);
+    }
+  }
+
+  function extractFontUrl(srcValue) {
+    const matches = [
+      ...srcValue.matchAll(
+        /url\(["']?([^"')]+)["']?\)(?:\s*format\(["']?([^"')]+)["']?\))?/gi,
+      ),
+    ];
+    if (matches.length === 0) return null;
+    const woff2 = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff2"));
+    if (woff2) return woff2[1];
+    const woff = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff"));
+    if (woff) return woff[1];
+    return matches[0][1];
+  }
+
+  // Cache resolved font URL -> data URI across captures. Fonts on a page
+  // essentially never change, and a batch run emits multiple captures back to
+  // back — without this we'd refetch + re-base64 every time.
+  const fontDataUriCache = new Map();
+  const SRC_DECLARATION_RE = /src\s*:\s*[^;}]+/i;
+
+  async function fetchAsDataUri(url) {
+    if (fontDataUriCache.has(url)) return fontDataUriCache.get(url);
+    let dataUri = null;
+    try {
+      const response = await fetch(url, { mode: "cors", credentials: "omit" });
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob.size <= MAX_FONT_BYTES) {
+          dataUri = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () =>
+              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        }
+      }
+    } catch (_error) {
+      dataUri = null;
+    }
+    fontDataUriCache.set(url, dataUri);
+    return dataUri;
+  }
+
+  function collectFontFaceRuleTexts() {
+    const rules = [];
+    for (const sheet of document.styleSheets) {
+      let cssRules;
+      try {
+        cssRules = sheet.cssRules;
+      } catch (_error) {
+        continue;
+      }
+      if (!cssRules) continue;
+      for (const rule of cssRules) {
+        const cssText = rule.cssText || "";
+        if (cssText.startsWith("@font-face")) rules.push(cssText);
+      }
+    }
+    return rules;
+  }
+
+  async function buildInlinedFontCss() {
+    const ruleTexts = collectFontFaceRuleTexts();
+    if (ruleTexts.length === 0) return null;
+
+    const resolved = ruleTexts.map((cssText) => {
+      if (!SRC_DECLARATION_RE.test(cssText)) return null;
+      const srcMatch = cssText.match(/src\s*:\s*([^;}]+)[;}]/i);
+      if (!srcMatch) return null;
+      const url = extractFontUrl(srcMatch[1]);
+      if (!url) return null;
+      try {
+        return { cssText, url: new URL(url, document.baseURI).href };
+      } catch (_error) {
+        return null;
+      }
+    });
+
+    const dataUris = await Promise.all(
+      resolved.map((entry) => (entry ? fetchAsDataUri(entry.url) : Promise.resolve(null))),
+    );
+
+    const inlined = [];
+    let totalBytes = 0;
+    for (let index = 0; index < resolved.length; index += 1) {
+      const entry = resolved[index];
+      const dataUri = dataUris[index];
+      if (!entry || !dataUri) continue;
+      const approxBytes = dataUri.length * 0.75;
+      if (totalBytes + approxBytes > MAX_TOTAL_FONT_BYTES) break;
+      totalBytes += approxBytes;
+      inlined.push(entry.cssText.replace(SRC_DECLARATION_RE, `src: url("${dataUri}")`));
+    }
+    return inlined.length > 0 ? inlined.join("\n") : null;
+  }
+
+  function stripExternal(clone) {
+    const images = clone.querySelectorAll("img");
+    for (let index = 0; index < images.length; index += 1) {
+      const src = images[index].getAttribute("src");
+      if (src && !src.startsWith("data:")) images[index].removeAttribute("src");
+    }
+
+    const elements = clone.querySelectorAll("*");
+    for (let index = 0; index < elements.length; index += 1) {
+      const style = elements[index].style.cssText;
+      if (style && style.includes("url(")) {
+        elements[index].style.cssText = style.replace(
+          /url\(["']?(?!data:)[^)"']*["']?\)/gi,
+          "none",
+        );
+      }
+    }
+  }
+
+  function emitScroll() {
+    scrollRaf = 0;
+    if (!scrollForwarding) return;
+    postToTrustedTop({
+      type: "INLINE_EDIT_SCROLL",
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    });
+  }
+
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (!scrollForwarding || scrollRaf) return;
+      scrollRaf = requestAnimationFrame(emitScroll);
+    },
+    { passive: true, capture: true },
+  );
+
+  async function handleCaptureRequest(event) {
+    const requestId = event.data.requestId;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    function postResult(dataUrl) {
+      postToTrustedTop({
+        type: "INLINE_EDIT_SCREENSHOT_RESULT",
+        requestId,
+        dataUrl,
+        scrollX,
+        scrollY,
+      });
+    }
+
+    try {
+      // Wait for any pending web fonts to resolve so both inline metrics and
+      // the @font-face inlining below see the same loaded faces.
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (_error) {}
+      }
+
+      const clone = document.documentElement.cloneNode(true);
+      inlineAll(document.documentElement, clone);
+
+      const removedNodes = clone.querySelectorAll("script,link[rel=\"stylesheet\"],style");
+      for (let index = 0; index < removedNodes.length; index += 1) {
+        removedNodes[index].remove();
+      }
+
+      stripExternal(clone);
+
+      // Re-embed web fonts as data-URI @font-face rules so the SVG rasterizer
+      // can resolve them — external font URLs aren't fetched during
+      // foreignObject rendering, which would otherwise force a fallback face
+      // and change text metrics.
+      const inlinedFontCss = await buildInlinedFontCss();
+      if (inlinedFontCss) {
+        const styleEl = document.createElement("style");
+        styleEl.textContent = inlinedFontCss;
+        const head = clone.querySelector("head");
+        if (head) head.appendChild(styleEl);
+        else clone.insertBefore(styleEl, clone.firstChild);
+      }
+
+      const html = new XMLSerializer().serializeToString(clone);
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+        '<foreignObject width="100%" height="100%">' +
+        `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden">` +
+        `<div style="position:relative;left:-${scrollX}px;top:-${scrollY}px">` +
+        html +
+        "</div></div></foreignObject></svg>";
+      const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      const image = new Image();
+      image.onload = function () {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(image, 0, 0);
+        postResult(canvas.toDataURL("image/png"));
+      };
+      image.onerror = function () {
+        postResult(null);
+      };
+      image.src = svgUrl;
+    } catch (_error) {
+      postResult(null);
+    }
+  }
+
+  window.addEventListener("message", function (event) {
+    if (!event.data) return;
+    // Only accept messages from the direct parent frame. Blocks sibling /
+    // unrelated-window postMessage senders that could otherwise reach us.
+    if (event.source !== window.parent) return;
+
+    const trustedParentOrigin = getTrustedParentOrigin(event);
+    if (!trustedParentOrigin) return;
+    trustedTopOrigin = trustedParentOrigin;
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_START") {
+      scrollForwarding = true;
+      emitScroll();
+      return;
+    }
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_STOP") {
+      scrollForwarding = false;
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
+      return;
+    }
+
+    if (event.data.type !== "INLINE_EDIT_CAPTURE_REQUEST") return;
+
+    handleCaptureRequest(event);
+  });
+})();
+
+
+</script></body>
+</html>
