@@ -28,7 +28,7 @@ if not exist ".venv\Scripts\python.exe" (
 echo Sunucu: http://localhost:5000
 echo Durdurmak icin: Ctrl + C
 echo.
-start "" /b cmd /c "timeout /t 4 /nobreak >nul & start "" http://localhost:5000"
+start "" /b cmd /c "timeout /t 4 /nobreak >nul & start http://localhost:5000"
 ".venv\Scripts\python.exe" -m uvicorn server:app --host 127.0.0.1 --port 5000
 
 echo.
